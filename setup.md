@@ -42,7 +42,7 @@ Also, when you are using Jupyter Notebook, you might need to do extra setup.
 1. Pres Ctrl+Shift+P.
 2. Search `Python: select interpreter`
 3. Select `Etner interpreter path`
-4. Find and select `./.venv/Scripts/python.exe`
+4. Find and select `./.venv/Scripts/python.exe` or an equivalent path. It could be something like `./.venv/bin/python` or `./.venv/bin/python3.12`.
 
 
 # Venv Activate
