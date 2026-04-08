@@ -9,6 +9,8 @@ We will use virtual environment (venv). This ensures that we work on the same en
 You only need to set up once. But you will need to activate the virtual environment every time.
 
 # Venv setup
+We will use Python version >= 3.12. If you don't have it, you will have to install one of the versions >= 3.12.
+
 Move to the working directory
 ```bash
 cd ./final_project
@@ -18,10 +20,14 @@ Run the command to initialize the virtual environment
 ```bash
 python -m venv .venv
 ```
+Use the following commands to actiavate
+```bash
+source .venv/bin/activate
+```
 
 Install all the dependencies (packages that we all agreed to use)
 ```bash
-pip install -r requirements.txt
+pip install -r ../requirements.txt
 ```
 
 If you ever decide to install more packages, please install and update the requirement file by the command below
@@ -49,12 +55,12 @@ cd ./final_project
 
 Use the following commands to actiavate
 ```bash
-source .venv/Scripts/activate
+source .venv/bin/activate
 ```
 
-To deactiavate, you can either use the following commands or just close the terminal.
+To deactiavate, you can either use the following commands or just close the terminal. If this doesn't work, maybe try `deactivate`.
 ```bash
-source .venv/Scripts/deactiavte
+source .venv/bin/deactiavte
 ```
 
 # Config setup
