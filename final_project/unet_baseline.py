@@ -93,6 +93,7 @@ all_cases = collect_cases(Path(TRAIN_DIR))
 print(f"all 5 files present: {len(all_cases)}")
 
 # Volume preprocessing
+#############################################################
 def zscore_nonzero(x: np.ndarray) -> np.ndarray:
     x = x.astype(np.float32)
     mask = x != 0
@@ -104,7 +105,6 @@ def zscore_nonzero(x: np.ndarray) -> np.ndarray:
         x[mask] = (x[mask] - mean) / std
     return x
 
-
 def resize_slice(arr2d: np.ndarray, target_hw: Tuple[int, int], is_mask: bool = False) -> np.ndarray:
     arr = arr2d[..., np.newaxis].astype(np.float32)
     method = "nearest" if is_mask else "bilinear"
@@ -113,6 +113,7 @@ def resize_slice(arr2d: np.ndarray, target_hw: Tuple[int, int], is_mask: bool = 
         arr = (arr > 0.5).astype(np.float32)
     return arr
 
+#############################################################
 
 def load_case_as_slices(case: Dict[str, Path], img_size: int, slices_per_case: int) -> Tuple[np.ndarray, np.ndarray]:
     modalities = []
