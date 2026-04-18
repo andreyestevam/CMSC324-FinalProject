@@ -20,6 +20,8 @@ Run the command to initialize the virtual environment
 ```bash
 python -m venv .venv
 ```
+If this doesn't work, try `python3` or `python3.12` as an alternative.
+
 Use the following commands to actiavate
 ```bash
 source .venv/bin/activate
@@ -66,6 +68,22 @@ source .venv/bin/deactiavte
 # Config setup
 Since we don't have the dataset on the github repo, we will most likely have the dataset in a different path. In the shared files, we don't want to hardcode the path, so we will use `config.json`.
 
+## If you are using Google Drive Desktop
+If you are not using Google Drive Desktop, you can skip this and edit the json file.
+
+
+If you are, you might need to manually mount the drive with the following command
+```bash
+sudo mkdir /mnt/g
+sudo mount -t drvfs G: /mnt/g
+```
+Then you should be able to access to your Google Drive directory.
+```bash
+cd "/mnt/g/My Drive" 
+```
+You may proceed to edit the json file, as explained below.
+
+## Edit `config.json`
 Open your `config.json`, and replace the placeholder with your actual dataset path.
 ```json
 {
