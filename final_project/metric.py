@@ -1,4 +1,5 @@
 import tensorflow as tf
+from skimage.metrics import hausdorff_distance as skimage_hausdorff
 
 # loss function
 def dice_coef(y_true, y_pred, smooth=1.0):
@@ -25,4 +26,18 @@ def bce_dice_loss(y_true, y_pred):
 # hausdorff distance
 @tf.function
 def hausdorff_distance(y_true, y_pred):
-    pass
+    """
+    Compute the Hausdorff distance between two binary masks using scikit-image.
+    """
+    # Inner helper function to run outside Tensorflow graph
+    def _hausdorff(y_true, y_pred):
+        # Converts y_true and y_pred to binary masks (anything > 0.5 becomes True, False otherwise) and converts it to a NumPy array
+        y_true = (y_true > 0.5).numpy()
+        y_pred = (y_pred > 0.5).numpy()
+
+        # Call scikit-image on Hausdorff distance on the binary numpy arrays
+        return skimage_hausdorff(y_true, y_pred)
+    
+    # Wraps the _hausdorff to run withing TF's graph (casts inputs to float32, executes the function, and returns it as float64)
+    result = tf.py_function(_hausdorff, [tf.cast(y_true, tf.float32), tf.cast(y_pred, tf.float32)], tf.float64)
+    return tf.cast(result, tf.float32) # Converts back to float32 for consistency with other metrics
