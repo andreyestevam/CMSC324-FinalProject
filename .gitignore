@@ -1,4 +1,5 @@
-./config.json
+/config.json
+/final_project/config.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
