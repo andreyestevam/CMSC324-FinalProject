@@ -11,16 +11,16 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from skimage.metrics import hausdorff_distance as skimage_hausdorff
 
-PATCH_SIZE          = (64, 64, 64) #one 3D cube fed to the model
+PATCH_SIZE          = (64, 64, 64) #one 3D cube fed to the model, depth x height x width
 BATCH_SIZE          = 1              
 EPOCHS              = 5  # keep at low to save time           
 MAX_TRAIN_CASES     = 8             
 MAX_VAL_CASES       = 2
 PATCHES_PER_CASE    = 8            
-POSITIVE_PATCH_RATIO = 0.75          
+POSITIVE_PATCH_RATIO = 0.75  # 75% of patches are centered on tumor voxels, 25% are random      
 USE_WHOLE_TUMOR     = True           
 BASE_FILTERS        = 16            
-DROPOUT_RATE        = 0.20
+DROPOUT_RATE        = 0.20  # enables MC uncertainty estimation later
 SEED                = 42
 MODEL_OUT           = "unet3d_baseline.keras"
 
@@ -28,7 +28,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# subject to change 
+# subject to change (identical to the pervious 2d version)
 from google.colab import drive
 drive.mount('/content/drive')
 
@@ -92,8 +92,14 @@ def collect_cases(training_dir: Path) -> List[Dict[str, Path]]:
 all_cases = collect_cases(Path(TRAIN_DIR))
 print(f"Complete cases (all 5 files present): {len(all_cases)}")
 
+
+##############
+# different from the 2d version
+# Instead of extracting flat slices, it extracts 3D cubes
+
+# same as 2d
 def zscore_nonzero(x: np.ndarray) -> np.ndarray:
-    """Normalize only non-zero voxels to avoid background skewing stats."""
+    """Normalize only non-zero voxels to avoid background skewing stats,; zero voxels are background/air"""
     x = x.astype(np.float32)
     mask = x != 0
     if np.any(mask):
@@ -104,12 +110,13 @@ def zscore_nonzero(x: np.ndarray) -> np.ndarray:
         x[mask] = (x[mask] - mean) / std
     return x
 
-
+# Reorders the axes to match what the model expects
+# I am not very sure about what this part is doing. This part comes from AI suggestion
 def to_dhw(vol_xyz: np.ndarray) -> np.ndarray:
     """Reorder [H, W, Z] → [D, H, W]."""
     return np.transpose(vol_xyz, (2, 0, 1)).astype(np.float32)
 
-
+# core 3D patch extraction function
 def extract_patch(volume: np.ndarray,
                   mask: np.ndarray,
                   patch_size: Tuple[int, int, int],
@@ -117,9 +124,13 @@ def extract_patch(volume: np.ndarray,
     """Cut a fixed-size 3D cube around a center coordinate. Pads if near boundary."""
     dz, dy, dx = patch_size
     D, H, W    = volume.shape[:3]
+    # Given a center coordinate (cz, cy, cx) inside the brain volume, it cuts out a 64×64×64 cube centered there
     cz, cy, cx = int(center[0]), int(center[1]), int(center[2])
 
     # Compute start indices and clamp to valid range
+    # Start z1, y1, x1; end z2, y2, x2
+    # handles edge cases where the center is near the brain boundary 
+    # shifts the patch inward rather than going out of bounds
     z1 = max(0, cz - dz // 2);  z2 = min(D, z1 + dz);  z1 = max(0, z2 - dz)
     y1 = max(0, cy - dy // 2);  y2 = min(H, y1 + dy);  y1 = max(0, y2 - dy)
     x1 = max(0, cx - dx // 2);  x2 = min(W, x1 + dx);  x1 = max(0, x2 - dx)
@@ -127,7 +138,7 @@ def extract_patch(volume: np.ndarray,
     vol_patch  = volume[z1:z2, y1:y2, x1:x2, :]
     mask_patch = mask[z1:z2, y1:y2, x1:x2, :]
 
-    # Zero-pad if the patch was cut off at the brain boundary
+    # Zero-pad if the patch was cut off at the very edge of the brain (smaller than 64x64x64)
     pd = dz - vol_patch.shape[0]
     ph = dy - vol_patch.shape[1]
     pw = dx - vol_patch.shape[2]
@@ -146,7 +157,7 @@ def sample_patch_centers(mask_3d: np.ndarray,
     Choose patch centers — 75% centered on tumor voxels, 25% random.
     This prevents the model from only seeing tumor and ignoring background.
     """
-    tumor_voxels = np.argwhere(mask_3d > 0)
+    tumor_voxels = np.argwhere(mask_3d > 0) # finds all voxel coordinates that contain tumor
     D, H, W = mask_3d.shape
     centers = []
     for _ in range(n_patches):
@@ -157,16 +168,18 @@ def sample_patch_centers(mask_3d: np.ndarray,
         centers.append((int(cz), int(cy), int(cx)))
     return centers
 
-
+# the full pipeline for one patient
 def load_case_as_patches(case: Dict[str, Path],
                           patch_size: Tuple[int, int, int],
                           patches_per_case: int) -> Tuple[np.ndarray, np.ndarray]:
     """Load one patient, normalize all 4 modalities, extract 3D patches."""
     modalities = []
+    # loads all 4 volumes, reorder and do normalization
     for key in ["t1", "t1ce", "t2", "flair"]:
         vol = nib.load(str(case[key])).get_fdata().astype(np.float32)
         modalities.append(zscore_nonzero(to_dhw(vol)))
 
+    # Loads the segmentation mask, reorders axes, and collapses all tumor labels to binary (0=background, 1=tumor)
     seg = nib.load(str(case["seg"])).get_fdata().astype(np.float32)
     seg = to_dhw(seg)
     seg = (seg > 0).astype(np.float32)    # whole-tumor binary mask
@@ -178,12 +191,15 @@ def load_case_as_patches(case: Dict[str, Path],
 
     xs, ys = [], []
     for center in centers:
-        xp, yp = extract_patch(image_4d, mask_4d, patch_size, center)
+        xp, yp = extract_patch(image_4d, mask_4d, patch_size, center) # cut out the actual 3D cubes
         xs.append(xp)
         ys.append(yp)
 
-    return np.stack(xs), np.stack(ys)
+    return np.stack(xs), np.stack(ys) # return a stacked array of shape for images and masks
 
+# new for 3d baseline
+# multiplies the dataset by up to 8× with zero extra data collection, prevent overfitting
+# only applied only during training (not validation)
 def augment_patch(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Random flips along all 3 spatial axes.
@@ -218,6 +234,7 @@ def augment_tf(x: tf.Tensor, y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     y_aug.set_shape(y.shape)
     return x_aug, y_aug
 
+# loops over all assigned cases, call load_case_as_patches on each one
 def build_numpy_dataset(cases, patch_size, patches_per_case):
     all_x, all_y = [], []
     for i, case in enumerate(cases, 1):
@@ -227,11 +244,11 @@ def build_numpy_dataset(cases, patch_size, patches_per_case):
         all_y.append(y)
     return np.concatenate(all_x).astype(np.float32), np.concatenate(all_y).astype(np.float32)
 
-
+# wraps the numpy arrays into a TensorFlow pipeline
 def make_tf_dataset(x, y, batch_size, training):
-    ds = tf.data.Dataset.from_tensor_slices((x, y))
+    ds = tf.data.Dataset.from_tensor_slices((x, y)) # treats each patch as one element in the dataset
     if training:
-        ds = ds.shuffle(min(len(x), 256), seed=SEED, reshuffle_each_iteration=True)
+        ds = ds.shuffle(min(len(x), 256), seed=SEED, reshuffle_each_iteration=True) # randomly reorders
         ds = ds.map(augment_tf, num_parallel_calls=tf.data.AUTOTUNE)  
     return ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
@@ -255,6 +272,9 @@ print(f"x_val:   {x_val.shape}  y_val:   {y_val.shape}")
 
 train_ds = make_tf_dataset(x_train, y_train, BATCH_SIZE, training=True)
 val_ds   = make_tf_dataset(x_val,   y_val,   BATCH_SIZE, training=False)
+
+# 3d model
+# There are many references in github open sources
 
 def conv3d_block(x, filters, dropout_rate=0.0):
     """
@@ -363,12 +383,14 @@ model.compile(
 )
 
 callbacks = [
+    # saves the model to disk whenever validation Dice improves (critical to colab)
     tf.keras.callbacks.ModelCheckpoint(
         MODEL_OUT, save_best_only=True, monitor="val_dice_coef", mode="max"
     ),
     tf.keras.callbacks.EarlyStopping(
         monitor="val_dice_coef", mode="max", patience=5, restore_best_weights=True
     ),
+    # if Dice hasn't improved for 3 epochs, cuts the learning rate in half
     tf.keras.callbacks.ReduceLROnPlateau(
         monitor="val_dice_coef", mode="max", factor=0.5, patience=3, min_lr=1e-6
     ),
@@ -415,12 +437,14 @@ for xb, yb in val_ds:
     all_hd.append(batch_hd)
 
 print(f"\n{'='*40}")
-print(f"  Mean Dice coefficient : {np.mean(all_dice):.4f}")
-print(f"  Mean Hausdorff distance: {np.mean(all_hd):.2f} voxels")
+print(f"  Mean Dice coefficient : {np.mean(all_dice):.4f}") # the higher the better, 0->1
+print(f"  Mean Hausdorff distance: {np.mean(all_hd):.2f} voxels") # measures boundary accuracy in voxels (lower is better, 0 is perfect)
 print(f"{'='*40}")
 
 
 # Sample 3D prediction visual
+# Since we can't display a 3D volume directly, 
+# This takes a single 2D slice from the middle of the depth dimension of the predicted 3D patch to give a representative cross-section
 def show_prediction_3d(model, x, y, out_png="sample_prediction_3d.png"):
     idx  = np.random.randint(0, len(x))
     pred = model.predict(x[idx:idx+1], verbose=0)[0, ..., 0]  
