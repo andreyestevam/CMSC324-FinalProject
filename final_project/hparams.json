@@ -1,0 +1,10 @@
+{
+    "swin_transformer": {
+        "best_hparams": {},
+        "hparam_grid": {}
+    },
+    "unet": {
+        "best_hparams": {},
+        "hparam_grid": {}
+    }
+}
