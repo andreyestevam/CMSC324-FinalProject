@@ -75,7 +75,7 @@ def collect_cases(training_dir: Path) -> List[Dict[str, Path]]:
         raise RuntimeError(f"No complete cases found in {training_dir}.")
     return cases
 
-# def __main__():
+# def __name__ == "__main__":
 #     all_cases = collect_cases(Path(TRAIN_DIR))
 #     print(f"all 5 files present: {len(all_cases)}")
 
