@@ -247,8 +247,8 @@ def build_numpy_dataset(cases, patch_size, patches_per_case):
 # wraps the numpy arrays into a TensorFlow pipeline
 def make_tf_dataset(x, y, batch_size, training):
     ds = tf.data.Dataset.from_tensor_slices((x, y)) # treats each patch as one element in the dataset
-    if training:
-        ds = ds.shuffle(min(len(x), 256), seed=SEED, reshuffle_each_iteration=True) # randomly reorders
+    if training: 
+        ds = ds.shuffle(min(len(x), 256), seed=SEED, reshuffle_each_iteration=True) # randomly reorders 
         ds = ds.map(augment_tf, num_parallel_calls=tf.data.AUTOTUNE)  
     return ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
