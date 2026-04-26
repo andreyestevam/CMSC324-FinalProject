@@ -88,12 +88,6 @@ def collect_cases(training_dir: Path = TRAIN_DIR) -> List[Dict[str, Path]]:
         
         files = _locate_case_files(case_dir)
 
-        # Remove data with issues
-        if "BraTS-PED-00024-000" in case_dir.name or "BraTS-PED-00098-000" in case_dir.name:
-            continue
-        
-        files = _locate_case_files(case_dir)
-
         if all(files[k] is not None for k in ["t1", "t1ce", "t2", "flair", "seg"]):
             files["case_id"] = case_dir.name
             cases.append(files)
