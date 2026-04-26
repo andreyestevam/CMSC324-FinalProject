@@ -2,11 +2,11 @@
     "swin_transformer": {
         "best_hparams": {},
         "hparam_grid": {
-            "patch_size": 0,
-            "batch_size": 0,
+            "patch_size": [64, 64, 64],
+            "batch_size": 1,
             "dropout_rate": 0,
             "learning_rate": 0,
-            "n_epochs": 0,
+            "n_epochs": 5,
             "optimizer": "Adam",
             "loss_function": ""
         }
@@ -14,11 +14,11 @@
     "unet": {
         "best_hparams": {},
         "hparam_grid": {
-            "patch_size": 0,
-            "batch_size": 0,
+            "patch_size": [64, 64, 64],
+            "batch_size": 1,
             "dropout_rate": 0,
             "learning_rate": 0,
-            "n_epochs": 0,
+            "n_epochs": 5,
             "optimizer": "Adam",
             "loss_function": ""
         }

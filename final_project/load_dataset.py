@@ -8,7 +8,7 @@ import numpy as np
 import nibabel as nib
 import tensorflow as tf
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Dataset
 
 
 ############################################################
@@ -119,7 +119,6 @@ def _zscore_nonzero(x: np.ndarray) -> np.ndarray:
             std = 1.0
         x[mask] = (x[mask] - mean) / std
     return x
-###### Volume Preprocessing ######
 
 ######### Down Sampling ##########
 def _sample_patch_centers(mask_3d: np.ndarray,
@@ -167,14 +166,12 @@ def _extract_patch(volume: np.ndarray,
         mask_patch = np.pad(mask_patch, pad, mode="constant")
 
     return vol_patch.astype(np.float32), mask_patch.astype(np.float32)
-######### Down Sampling ##########
-
 
 def _to_dhw(vol_xyz: np.ndarray) -> np.ndarray:
     """Reorder [H, W, Z] → [D, H, W]."""
     return np.transpose(vol_xyz, (2, 0, 1)).astype(np.float32)
 
-def load_case_as_patches(case: Dict[str, Path],
+def _load_case_as_patches(case: Dict[str, Path],
                           patch_size: Tuple[int, int, int],
                           patches_per_case: int) -> Tuple[np.ndarray, np.ndarray]:
     """Load one patient, normalize all 4 modalities, extract 3D patches."""
@@ -220,7 +217,7 @@ def _build_numpy_dataset(cases: List[Dict],
     all_x, all_y = [], []
     for i, case in enumerate(cases, 1):
         print(f"  Loading {i}/{len(cases)}: {case['case_id']}")
-        x, y = load_case_as_patches(case, patch_size, patches_per_case)
+        x, y = _load_case_as_patches(case, patch_size, patches_per_case)
         all_x.append(x)
         all_y.append(y)
     return np.concatenate(all_x).astype(np.float32), np.concatenate(all_y).astype(np.float32)
@@ -249,15 +246,15 @@ def _augment_patch(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray
     x shape: [D, H, W, 4]
     y shape: [D, H, W, 1]
     """
-    # Flip along depth axis (axial planes)
+    # Flip along depth axis
     if random.random() < 0.5:
         x = x[::-1, :, :, :].copy()
         y = y[::-1, :, :, :].copy()
-    # Flip along height axis (coronal planes)
+    # Flip along height axis
     if random.random() < 0.5:
         x = x[:, ::-1, :, :].copy()
         y = y[:, ::-1, :, :].copy()
-    # Flip along width axis (sagittal planes)
+    # Flip along width axis
     if random.random() < 0.5:
         x = x[:, :, ::-1, :].copy()
         y = y[:, :, ::-1, :].copy()
@@ -274,34 +271,11 @@ def _augment_tf(x: tf.Tensor, y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     y_aug.set_shape(y.shape)
     return x_aug, y_aug
 
-def augment_torch_batch(x_batch: torch.Tensor,
-                        y_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Wraps numpy augmentation for use inside PyTorch pipeline."""
-    x_np = x_batch.numpy()
-    y_np = y_batch.numpy()
-    
-    for i in range(len(x_np)):
-        x_np[i], y_np[i] = _augment_patch(x_np[i], y_np[i])
-        
-    x_tensor = torch.from_numpy(x_np)
-    y_tensor = torch.from_numpy(y_np)
-    
-    # Permute axes to [B, C, D, H, W]
-    x_tensor = x_tensor.permute(0, 4, 1, 2, 3)
-    y_tensor = y_tensor.permute(0, 4, 1, 2, 3)
-    
-    return x_tensor, y_tensor
-
-def format_torch_test_batch(x_batch: torch.Tensor,
-                            y_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Permutes testing batches to PyTorch format [B, C, D, H, W] without augmenting."""
-    x_tensor = x_batch.permute(0, 4, 1, 2, 3)
-    y_tensor = y_batch.permute(0, 4, 1, 2, 3)
-    return x_tensor, y_tensor
 
 ############################################################
 ###############         Make Datasets        ###############
 ############################################################
+
 def make_tf_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> TensorDataset:
     ds = tf.data.Dataset.from_tensor_slices((x, y)) # treats each patch as one element in the dataset
     if training: 
@@ -309,21 +283,45 @@ def make_tf_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> TensorDatas
         ds = ds.map(_augment_tf, num_parallel_calls=tf.data.AUTOTUNE)  
     return ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
 
-def make_torch_dataloader(x: np.ndarray, y: np.ndarray, training: bool) -> DataLoader:
+class BraTSDataset(Dataset):
+    """Custom PyTorch dataset with augmentation"""
+    def __init__(self, x: np.ndarray, y: np.ndarray, training: bool):
+        self.x = x
+        self.y = y
+        self.training = training
 
-    x_tensor = torch.from_numpy(x).float()
-    y_tensor = torch.from_numpy(y).float()
-    
-    dataset = TensorDataset(x_tensor, y_tensor)
+    def __len__(self) -> int:
+        return len(self.x)
 
-    # Reproducibilefor the shuffling
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        x_patch = self.x[idx]
+        y_patch = self.y[idx]
+
+        # Apply data augmentation if training
+        if self.training:
+            x_patch, y_patch = _augment_patch(x_patch, y_patch)
+
+        x_tensor = torch.from_numpy(x_patch).float()
+        y_tensor = torch.from_numpy(y_patch).float()
+
+        # Permute to PyTorch format [C, D, H, W]
+        x_tensor = x_tensor.permute(3, 0, 1, 2)
+        y_tensor = y_tensor.permute(3, 0, 1, 2)
+
+        return x_tensor, y_tensor
+
+def make_torch_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> DataLoader:
+    # Custom Dataset with augmentation
+    dataset = BraTSDataset(x, y, training)
+
+    # Reproducible generator for the shuffling
     g = torch.Generator()
     g.manual_seed(SEED)
 
     return DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
-        shuffle=training,
-        generator=g if training else None,
-        pin_memory=True
+        shuffle=training,                  
+        generator=g if training else None, 
+        pin_memory=True                    
     )
