@@ -7,7 +7,7 @@
             "dropout_rate": 0,
             "learning_rate": 0,
             "n_epochs": 0,
-            "optmizer": 0,
+            "optimizer": "Adam",
             "loss_function": ""
         }
     },
@@ -19,7 +19,7 @@
             "dropout_rate": 0,
             "learning_rate": 0,
             "n_epochs": 0,
-            "optimizer": "",
+            "optimizer": "Adam",
             "loss_function": ""
         }
     }
