@@ -2,6 +2,7 @@ import tensorflow as tf
 from skimage.metrics import hausdorff_distance as skimage_hausdorff
 import numpy as np
 
+<<<<<<< HEAD
 
 # Monte carlo dropout for uncertanty estimation
 def monte_carlo_dropout(model, x, num_passes=50):
@@ -48,6 +49,11 @@ def uncertainty_map(std_prediction, threshold = 0.15):
     return uncertainty_binary
 
 # Loss functions and metrics
+=======
+# TODO: Add PyTorch equivalents for dice_coef, soft_dice_loss, bce_dice_loss, and hausdorff_distance.
+
+# loss function
+>>>>>>> 0ecbd976dc788deb5bb346301a2202e858281908
 def dice_coef(y_true, y_pred, smooth=1.0):
     y_true = tf.cast(y_true, tf.float32)
     y_pred = tf.cast(y_pred > 0.5, tf.float32)

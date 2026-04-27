@@ -222,13 +222,16 @@ def build_dataset(training: bool,
                   n_test: int = 51) -> Tuple[np.ndarray, np.ndarray]:
     all_cases = collect_cases()
     train_cases, test_cases = _load_locked_splits(all_cases)
+    
+    train_cases = train_cases[0:n_train]
+    test_cases = test_cases[0:n_test]
 
     if training:
         x_train, y_train = _build_numpy_dataset(train_cases, PATCH_SIZE, PATCHES_PER_CASE)
-        return x_train[0:n_train], y_train[0:n_train]
+        return x_train, y_train
     else:
         x_test, y_test = _build_numpy_dataset(test_cases, PATCH_SIZE, PATCHES_PER_CASE)
-        return x_test[0:n_test], y_test[0:n_test]
+        return x_test, y_test
 
 
 ############################################################

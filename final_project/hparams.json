@@ -4,21 +4,27 @@
         "hparam_grid": {
             "patch_size": [64, 64, 64],
             "batch_size": 1,
-            "dropout_rate": 0,
+            "dropout_rate": 0.2,
+            "dropout_path_rate": 0.2, 
+            "attn_drop_rate": 0.2,
             "learning_rate": 0.001, 
             "n_epochs": 5,
+            "model_out": "swin_unetr_mc_best.pth",
             "optimizer": "Adam",
-            "loss_function": "bce_dice"
+            "loss_function": "bce_dice",
+            "feature_size": 24
         }
     },
     "unet": {
         "best_hparams": {},
         "hparam_grid": {
+            "input_shape": [64, 64, 64, 4],
             "patch_size": [64, 64, 64],
             "batch_size": 1,
             "dropout_rate": 0.2,
             "learning_rate": 0.001,
             "n_epochs": 5,
+            "model_out": "unet3d_baseline.keras",
             "optimizer": "Adam",
             "loss_function": "bce_dice"
         }
