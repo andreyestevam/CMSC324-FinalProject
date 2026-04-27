@@ -1,6 +1,8 @@
 import tensorflow as tf
 from skimage.metrics import hausdorff_distance as skimage_hausdorff
 
+# TODO: Add PyTorch equivalents for dice_coef, soft_dice_loss, bce_dice_loss, and hausdorff_distance.
+
 # loss function
 def dice_coef(y_true, y_pred, smooth=1.0):
     y_true = tf.cast(y_true, tf.float32)
