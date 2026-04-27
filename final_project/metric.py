@@ -1,7 +1,53 @@
 import tensorflow as tf
 from skimage.metrics import hausdorff_distance as skimage_hausdorff
+import numpy as np
 
-# loss function
+
+# Monte carlo dropout for uncertanty estimation
+def monte_carlo_dropout(model, x, num_passes=50):
+    """
+    Run MC dropout inference on input data. Performs multiple forward passes
+    with dropout enabled, allowing us to estimate prediction uncertainty.
+
+    Parameters:
+        model: Keras model with Dropout layers
+        x: Input data
+        num_passes: number of forward passes to perform (default: 50)
+            The more passes, the better uncertainty estimate but it will be slower
+    """
+    all_predictions = []
+
+    for i in range(num_passes):
+        # Forward pass with dropout enabled, and training = True forces dropout to be active
+        prediction = model(x, training = True)
+        all_predictions.append(prediction.numpy())
+
+        # Print every 5 rows
+        if (i + 1) % 5 == 0:
+            print(f"Monte Carlo pass {i + 1}/{num_passes} completed")
+    
+    # Stack all predictions i.e. num passes batch size height width channels
+    all_predictions = np.array(all_predictions)
+    mean_prediction = np.mean(all_predictions, axis = 0)
+    std_prediction = np.std(all_predictions, axis = 0)
+
+    return mean_prediction, std_prediction, all_predictions
+
+def uncertainty_map(std_prediction, threshold = 0.15):
+    """
+    Create an uncertainty map showing which predictions are unreliable given a threshold
+
+    Parameters:
+        std_prediction: Standard deviation from Monte Carlo Dropout
+        threshold: Pixels with standard deviation above this value are considered uncertain
+    
+    Returns:
+        uncertainty_binary: Binary map where 1 = uncertain, 0 = confident
+    """
+    uncertainty_binary = (std_prediction > threshold).astype(np.float32)
+    return uncertainty_binary
+
+# Loss functions and metrics
 def dice_coef(y_true, y_pred, smooth=1.0):
     y_true = tf.cast(y_true, tf.float32)
     y_pred = tf.cast(y_pred > 0.5, tf.float32)
