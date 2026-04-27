@@ -20,6 +20,7 @@
             "dropout_rate": 0.2,
             "learning_rate": 0.001,
             "n_epochs": 5,
+            "model_out": "unet3d_baseline.keras",
             "optimizer": "Adam",
             "loss_function": "bce_dice"
         }
