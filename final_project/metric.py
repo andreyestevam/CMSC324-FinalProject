@@ -3,7 +3,7 @@ from skimage.metrics import hausdorff_distance as skimage_hausdorff
 import numpy as np
 
 # Monte carlo dropout for uncertanty estimation
-def monte_carlo_dropout(model, x, num_passes=50):
+def monte_carlo_dropout(model, x, num_passes):
     """
     Run MC dropout inference on input data. Performs multiple forward passes
     with dropout enabled, allowing us to estimate prediction uncertainty.
@@ -17,8 +17,8 @@ def monte_carlo_dropout(model, x, num_passes=50):
     all_predictions = []
 
     for i in range(num_passes):
-        # Forward pass with dropout enabled, and training = True forces dropout to be active
-        prediction = model(x, training = True)
+        # Forward pass with dropout enabled
+        prediction = model(x)
         all_predictions.append(prediction.numpy())
 
         # Print every 5 rows
