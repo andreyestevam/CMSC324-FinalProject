@@ -52,5 +52,5 @@ def conv3d_block(x, filters, dropout_rate=0.0):
     x = tf.keras.layers.Activation("relu")(x)
 
     if dropout_rate > 0:
-        x = tf.keras.layers.Dropout(dropout_rate)(x)
+        x = tf.keras.layers.Dropout(dropout_rate)(x, training=True)
     return x
