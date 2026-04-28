@@ -13,24 +13,26 @@ def mc_prediction(model, x, num_passes):
         x: Input data
         num_passes: number of forward passes to perform (default: 50)
             The more passes, the better uncertainty estimate but it will be slower
+    Returns:
+        mean_prediction: the mean of all the predictions
+        std_prediction: the standard deviation of the predictions
+        all_predictions: the list of all predictions
     """
-    all_predictions = []
+    predictions = []
 
     for i in range(num_passes):
-        # Forward pass with dropout enabled
+        # Forward passes
         prediction = model(x)
-        all_predictions.append(prediction.numpy())
-
-        # Print every 5 rows
-        if (i + 1) % 5 == 0:
-            print(f"Monte Carlo pass {i + 1}/{num_passes} completed")
+        predictions.append(prediction.numpy())
+        
+        print(f"Monte Carlo pass {i + 1}/{num_passes} completed")
     
-    # Stack all predictions i.e. num passes batch size height width channels
-    all_predictions = np.array(all_predictions)
-    mean_prediction = np.mean(all_predictions, axis = 0)
-    std_prediction = np.std(all_predictions, axis = 0)
+    # Convert to numpy and calculate mean and std
+    predictions = np.array(predictions)
+    mean_prediction = np.mean(predictions, axis = 0)
+    std_prediction = np.std(predictions, axis = 0)
 
-    return mean_prediction, std_prediction, all_predictions
+    return mean_prediction, std_prediction, predictions
 
 def uncertainty_map(std_prediction, threshold = 0.15):
     """
