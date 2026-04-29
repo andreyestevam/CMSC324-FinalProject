@@ -11,15 +11,12 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader, Dataset
 
 
-############################################################
-###############     SET HYPERPARAMETERS      ###############
-############################################################
+## SET HYPERPARAMETERS 
 # Load file path
 with open('./config.json', 'r') as f:
     config = json.load(f)
     dataset_path = config['dataset_path']
-ROOT = dataset_path
-TRAIN_DIR = Path(os.path.join(ROOT, "Training"))
+TRAIN_DIR = Path(os.path.join(dataset_path, "Training"))
 
 # Load hyperparameters
 with open('./hparams.json', 'r') as f:
@@ -41,7 +38,7 @@ with open('./hparams.json', 'r') as f:
 POSITIVE_PATCH_RATIO = 0.75  # 75% of patches are centered on tumor voxels, 25% are random     
 PATCHES_PER_CASE = 8
 
-# Random seed
+# Random seeds
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -49,11 +46,9 @@ tf.random.set_seed(SEED)
 torch.manual_seed(SEED)
 
 
-############################################################
-###############          LOAD CASES          ###############
-############################################################
+## LOAD CASES
 def _locate_case_files(case_dir: Path) -> Dict[str, Optional[Path]]:
-    
+    """Get file paths for a case"""
     mapping = {
         "-t1n.nii.gz": "t1",
         "-t1c.nii.gz": "t1ce",
@@ -61,9 +56,7 @@ def _locate_case_files(case_dir: Path) -> Dict[str, Optional[Path]]:
         "-t2f.nii.gz": "flair",
         "-seg.nii.gz": "seg"
     }
-    
     files = list(case_dir.glob("*.nii.gz"))
-
     result = {}
     for suffix, key in mapping.items():
         found_file = None
@@ -71,64 +64,58 @@ def _locate_case_files(case_dir: Path) -> Dict[str, Optional[Path]]:
             if f.name.lower().endswith(suffix):
                 found_file = f
                 break
-        
         result[key] = found_file
-
     return result
 
 def collect_cases(training_dir: Path = TRAIN_DIR) -> List[Dict[str, Path]]:
+    "Get file pathes for all cases"
     cases = []
     for case_dir in sorted(training_dir.iterdir()):
         if not case_dir.is_dir() or "BraTS" not in case_dir.name:
             continue
-
         # Remove data with issues
         if "BraTS-PED-00024-000" in case_dir.name or "BraTS-PED-00098-000" in case_dir.name:
             continue
-        
-        files = _locate_case_files(case_dir)
 
+        files = _locate_case_files(case_dir)
         if all(files[k] is not None for k in ["t1", "t1ce", "t2", "flair", "seg"]):
             files["case_id"] = case_dir.name
             cases.append(files)
     if not cases:
         raise RuntimeError(f"No complete cases found in {training_dir}.")
-    
-    
     return cases
 
 
-############################################################
-###############       LOAD TO PATCHES        ###############
-############################################################
-###### Volume Preprocessing ######
-def _zscore_nonzero(x: np.ndarray) -> np.ndarray:
-    """Normalize only non-zero voxels to avoid background skewing stats. (mean=0; std=1)"""
+## LOAD TO PATCHES
+# Volume Preprocessing
+def _zscore_pos(x: np.ndarray) -> np.ndarray:
+    """
+    Normalize non-zero voxels
+    (mean=0; std=1)
+    """
     x = x.astype(np.float32)    # type casting
-    mask = x != 0
+    mask = x > 0
     if np.any(mask):
         vals = x[mask]
         mean, std = vals.mean(), vals.std()
-        if std < 1e-6:
-            std = 1.0
-        x[mask] = (x[mask] - mean) / std
+        x[mask] = (x[mask] - mean) / (max(std, 1e-8))
     return x
 
-######### Down Sampling ##########
+# Down Sampling
 def _sample_patch_centers(mask_3d: np.ndarray,
                           n_patches: int,
                           pos_ratio: float = 0.75) -> List[Tuple[int, int, int]]:
     """
-    Choose patch centers — 75% centered on tumor voxels, 25% random.
-    This prevents the model from only seeing tumor and ignoring background.
+    Choose patch centers
+    - 75% centered on tumor voxels, 25% random.
     """
     tumor_voxels = np.argwhere(mask_3d > 0)
     D, H, W = mask_3d.shape
     centers = []
     for _ in range(n_patches):
-        if len(tumor_voxels) > 0 and random.random() < pos_ratio:
+        if len(tumor_voxels) > 0 and random.random() < pos_ratio: # 75% chance
             cz, cy, cx = tumor_voxels[random.randrange(len(tumor_voxels))]
-        else:
+        else: # 25% chance
             cz, cy, cx = random.randrange(D), random.randrange(H), random.randrange(W)
         centers.append((int(cz), int(cy), int(cx)))
     return centers
@@ -137,7 +124,7 @@ def _extract_patch(volume: np.ndarray,
                   mask: np.ndarray,
                   patch_size: Tuple[int, int, int],
                   center: Tuple[int, int, int]) -> Tuple[np.ndarray, np.ndarray]:
-    """Cut a fixed-size 3D cube around a center coordinate. Pads if near boundary."""
+    """Cut a fixed-size 3D cube around a center coordinate."""
     dz, dy, dx = patch_size
     D, H, W    = volume.shape[:3]
     cz, cy, cx = int(center[0]), int(center[1]), int(center[2])
@@ -172,7 +159,7 @@ def _load_case_as_patches(case: Dict[str, Path],
     modalities = []
     for key in ["t1", "t1ce", "t2", "flair"]:
         vol = nib.load(str(case[key])).get_fdata().astype(np.float32)
-        modalities.append(_zscore_nonzero(_to_dhw(vol)))
+        modalities.append(_zscore_pos(_to_dhw(vol)))
 
     seg = nib.load(str(case["seg"])).get_fdata().astype(np.float32)
     seg = _to_dhw(seg)
@@ -192,22 +179,23 @@ def _load_case_as_patches(case: Dict[str, Path],
     return np.stack(xs), np.stack(ys)
 
 
-############################################################
-###############    Build & Split Datasets    ###############
-############################################################
-def _load_locked_splits(cases: List[Dict[str, Path]]) -> Tuple[List, List]:
+## Build & Split Datasets
+def _load_dataset_splits(cases: List[Dict[str, Path]]) -> Tuple[List, List, List]:
+    """Load dataset from prviously shuffled and saved case list"""
     with open("dataset_splits.json", "r") as f:
         splits = json.load(f)
         
     train_cases = [c for c in cases if c["case_id"] in splits["train"]]
+    val_cases = [c for c in cases if c["case_id"] in splits["val"]]
     test_cases = [c for c in cases if c["case_id"] in splits["test"]]
     
-    return train_cases, test_cases
+    return train_cases, val_cases, test_cases
 
 
 def _build_numpy_dataset(cases: List[Dict], 
                         patch_size: Tuple,
                         patches_per_case: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Build dataset of the cases"""
     all_x, all_y = [], []
     for i, case in enumerate(cases, 1):
         print(f"  Loading {i}/{len(cases)}: {case['case_id']}")
@@ -217,26 +205,30 @@ def _build_numpy_dataset(cases: List[Dict],
     return np.concatenate(all_x).astype(np.float32), np.concatenate(all_y).astype(np.float32)
 
 
-def build_dataset(training: bool,
-                  n_train: int = 204,
-                  n_test: int = 51) -> Tuple[np.ndarray, np.ndarray]:
+def build_dataset(dataset: str,
+                  n_train: int = 179,
+                  n_val: int = 38,
+                  n_test: int = 38) -> Tuple[np.ndarray, np.ndarray]:
+    """Build train/validation/teset datasets"""
     all_cases = collect_cases()
-    train_cases, test_cases = _load_locked_splits(all_cases)
+    train_cases, val_cases, test_cases = _load_dataset_splits(all_cases)
     
     train_cases = train_cases[0:n_train]
+    val_cases = val_cases[0:n_val]
     test_cases = test_cases[0:n_test]
 
-    if training:
+    if dataset=='train':
         x_train, y_train = _build_numpy_dataset(train_cases, PATCH_SIZE, PATCHES_PER_CASE)
         return x_train, y_train
+    elif dataset=='val':
+        x_val, y_val = _build_numpy_dataset(val_cases, PATCH_SIZE, PATCHES_PER_CASE)
+        return x_val, y_val
     else:
         x_test, y_test = _build_numpy_dataset(test_cases, PATCH_SIZE, PATCHES_PER_CASE)
         return x_test, y_test
 
 
-############################################################
-###############       Data Augmentation      ###############
-############################################################
+## Data Augmentation
 def _augment_patch(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Random flips along all 3 spatial axes.
@@ -268,11 +260,7 @@ def _augment_tf(x: tf.Tensor, y: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     y_aug.set_shape(y.shape)
     return x_aug, y_aug
 
-
-############################################################
-###############         Make Datasets        ###############
-############################################################
-
+## Make Datasets
 def make_tf_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> TensorDataset:
     ds = tf.data.Dataset.from_tensor_slices((x, y)) # treats each patch as one element in the dataset
     if training: 
@@ -311,9 +299,9 @@ def make_torch_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> DataLoad
     # Custom Dataset with augmentation
     dataset = BraTSDataset(x, y, training)
 
-    # Reproducible generator for the shuffling
-    g = torch.Generator()
-    g.manual_seed(SEED)
+    # # Reproducible generator for the shuffling
+    # g = torch.Generator()
+    # g.manual_seed(SEED)
 
     return DataLoader(
         dataset,
