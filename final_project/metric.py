@@ -60,8 +60,8 @@ def dice_coef(y_true, y_pred, smooth=1.0):
 @tf.function
 def soft_dice_loss(y_true, y_pred, smooth=1.0):
     y_true = tf.cast(y_true, tf.float32)
-    intersection = tf.reduce_sum(y_true * y_pred, axis=[1, 2, 3])
-    denom = tf.reduce_sum(y_true, axis=[1, 2, 3]) + tf.reduce_sum(y_pred, axis=[1, 2, 3])
+    intersection = tf.reduce_sum(y_true * y_pred, axis=[1, 2, 3, 4])
+    denom = tf.reduce_sum(y_true, axis=[1, 2, 3, 4]) + tf.reduce_sum(y_pred, axis=[1, 2, 3, 4])
     return 1.0 - tf.reduce_mean((2.0 * intersection + smooth) / (denom + smooth))
 
 # sum of bce and dice loss
