@@ -22,7 +22,7 @@ def mc_prediction(model, x, num_passes):
 
     for i in range(num_passes):
         # Forward passes
-        prediction = model(x, training=False)
+        prediction = model(x)
         predictions.append(prediction.numpy())
         
         print(f"Monte Carlo pass {i + 1}/{num_passes} completed")
