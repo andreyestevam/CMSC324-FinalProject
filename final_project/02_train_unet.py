@@ -1,8 +1,8 @@
 import tensorflow as tf
 import os, json
 from load_dataset import build_dataset, make_tf_dataset
-from model import build_unet3d
-from metric import dice_coef, bce_dice_loss
+from model_unet import build_unet3d
+from metric_tf import dice_coef, bce_dice_loss
 
 with open('./hparams.json', 'r') as f:
     config = json.load(f)
@@ -12,8 +12,8 @@ with open('./hparams.json', 'r') as f:
 gpus = tf.config.list_physical_devices('GPU')
 print("Using device:", "GPU" if gpus else "CPU")
 
-x_train, y_train = build_dataset(dataset='train', n_train=40)
-x_val,   y_val   = build_dataset(dataset='val', n_val=2)
+x_train, y_train = build_dataset(dataset='train', n_train=42)
+x_val,   y_val   = build_dataset(dataset='val', n_val=6)
 
 train_ds = make_tf_dataset(x_train, y_train, training=True)
 val_ds = make_tf_dataset(x_val,   y_val,   training=False)

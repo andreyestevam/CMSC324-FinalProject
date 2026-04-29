@@ -10,7 +10,7 @@ from load_dataset import (
 )
 from metric_torch import bce_dice_loss, dice_coef
 # from metric import bce_dice_loss_torch, dice_coef_torch # TODO: maybe merge metric and metric_torch
-from swin_unetr import build_swin_unetr_mc
+from model_swin_unetr import build_swin_unetr_mc
 
 with open("./hparams.json", "r") as f:
     config = json.load(f)
@@ -21,8 +21,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 print("Hparams:", swin_cfg["hparam_grid"]) # TODO: will change once the json structure is updated
 
-x_train, y_train = build_dataset(dataset='train' n_train=5)
-x_val, y_val = build_dataset(dataset='val', n_val=3)
+x_train, y_train = build_dataset(dataset='train', n_train=42)
+x_val, y_val = build_dataset(dataset='val', n_val=6)
 
 # TODO: Replace this temporary test-as-validation setup with a proper validation split.
 train_loader = make_torch_dataset(x_train, y_train, training=True)

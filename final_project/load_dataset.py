@@ -299,9 +299,9 @@ def make_torch_dataset(x: np.ndarray, y: np.ndarray, training: bool) -> DataLoad
     # Custom Dataset with augmentation
     dataset = BraTSDataset(x, y, training)
 
-    # # Reproducible generator for the shuffling
-    # g = torch.Generator()
-    # g.manual_seed(SEED)
+    # Reproducible generator for the shuffling
+    g = torch.Generator()
+    g.manual_seed(SEED)
 
     return DataLoader(
         dataset,
