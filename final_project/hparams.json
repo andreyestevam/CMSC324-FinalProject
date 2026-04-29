@@ -9,7 +9,7 @@
             "attn_drop_rate": 0.2,
             "learning_rate": 0.001, 
             "n_epochs": 5,
-            "model_out": "swin_unetr_mc_best.pth",
+            "model_out": "output_swin_unetr.pth",
             "optimizer": "Adam",
             "loss_function": "bce_dice",
             "feature_size": 24
@@ -24,7 +24,7 @@
             "dropout_rate": 0.2,
             "learning_rate": 0.001,
             "n_epochs": 5,
-            "model_out": "unet3d_baseline.keras",
+            "model_out": "output_unet3d.keras",
             "optimizer": "Adam",
             "loss_function": "bce_dice"
         }
