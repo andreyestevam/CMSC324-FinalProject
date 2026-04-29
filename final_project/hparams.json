@@ -3,7 +3,7 @@
         "best_hparams": {},
         "hparam_grid": {
             "patch_size": [64, 64, 64],
-            "batch_size": 1,
+            "batch_size": 4,
             "dropout_rate": 0.2,
             "dropout_path_rate": 0.2, 
             "attn_drop_rate": 0.2,
