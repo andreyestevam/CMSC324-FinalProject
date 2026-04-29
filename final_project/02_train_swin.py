@@ -21,8 +21,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 print("Hparams:", swin_cfg["hparam_grid"]) # TODO: will change once the json structure is updated
 
-x_train, y_train = build_dataset(dataset='train', n_train=42)
-x_val, y_val = build_dataset(dataset='val', n_val=6)
+x_train, y_train = build_dataset(dataset='train', n_train=56)
+x_val, y_val = build_dataset(dataset='val', n_val=12)
 
 # TODO: Replace this temporary test-as-validation setup with a proper validation split.
 train_loader = make_torch_dataset(x_train, y_train, training=True)
@@ -32,7 +32,7 @@ print("Train samples:", len(x_train), "Val samples:", len(x_val))
 print("Train batches:", len(train_loader), "Val batches:", len(val_loader))
 
 model = build_swin_unetr_mc(
-    input_shape=(*hparams["patch_size"], 4),
+    input_shape=(4, *hparams["patch_size"]),
     out_channels=1,
     feature_size=hparams["feature_size"], # TODO: what does this hparameter do?
     drop_rate=hparams["dropout_rate"],

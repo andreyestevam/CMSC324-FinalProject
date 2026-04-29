@@ -45,12 +45,12 @@ class MCDropout(nn.Module):
 
 class MCDropPath(nn.Module):
     """Skip-connection path with Monte Carlo dropout"""
-    def __init__(self, drop_prob: float = 0.0) -> None:
+    def __init__(self, drop_probability: float = 0.0) -> None:
         super().__init__()
-        self.drop_prob = float(drop_prob)
+        self.drop_probability = float(drop_probability)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return _drop_path(x, drop_prob=self.drop_prob)
+        return _drop_path(x, drop_probability=self.drop_probability)
 
 
 def _replace_dropout_layers(module: nn.Module) -> None:
@@ -61,8 +61,8 @@ def _replace_dropout_layers(module: nn.Module) -> None:
             continue
 
         if isinstance(child, DropPath): # if a skip-connection
-            drop_prob = float(getattr(child, "drop_prob", 0.0))
-            setattr(module, name, MCDropPath(drop_prob=drop_prob))
+            drop_probability = float(getattr(child, "drop_probability", 0.0))
+            setattr(module, name, MCDropPath(drop_probability=drop_probability))
             continue
 
         _replace_dropout_layers(child) # recursive call
@@ -124,7 +124,7 @@ class SwinUNETRWithMCDropout(nn.Module):
 
 
 def build_swin_unetr_mc(
-    input_shape: Tuple[int, int, int, int] = (64, 64, 64, 4),
+    input_shape: Tuple[int, int, int, int] = (4, 64, 64, 64),
     out_channels: int = 1,
     feature_size: int = 24,
     drop_rate: float = 0.2,
