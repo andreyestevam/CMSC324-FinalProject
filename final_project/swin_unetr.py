@@ -12,72 +12,64 @@ from monai.networks.layers import DropPath
 from monai.networks.nets import SwinUNETR as MonaiSwinUNETR
 
 
+# explicitly export these definitions only
 __all__ = ["SwinUNETRWithMCDropout", "build_swin_unetr_mc"]
 
 
 def _drop_path(
     x: torch.Tensor,
-    drop_prob: float = 0.0,
-    scale_by_keep: bool = True, # TODO: what does this do? should I delete?
+    drop_probability: float = 0.0,
 ) -> torch.Tensor:
-    """Drop a skip-connection path with a probablity of `drop_prob`"""
-    if drop_prob <= 0.0:
-        return x
+    """Drop a skip-connection path with a probablity of `drop_probability`"""        
+    assert (0.0 <= drop_probability) and (drop_probability <= 1.0), ValueError(f"p is epxected to be between 0 and 1, got {drop_probability}")
 
-    keep_prob = 1.0 - drop_prob
+    keep_probability = 1.0 - drop_probability
     shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-    random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
-    if keep_prob > 0.0 and scale_by_keep:
-        random_tensor.div_(keep_prob)
+    random_tensor = x.new_empty(shape)
+    random_tensor = random_tensor.bernoulli_(keep_probability) # fill the tensor with 0s and 1s with keep_probability
+    if keep_probability > 0.0:
+        random_tensor.div_(keep_probability) # this is to scale the activation to have the same expected value
     return x * random_tensor
 
 
 class MCDropout(nn.Module):
-    """Monte Carlo dropout for a single neuron"""
-
+    """Monte Carlo dropout for a single neuron with probability p"""
     def __init__(self, p: float = 0.5) -> None:
         super().__init__()
+        assert (0.0 <= p) and (p <= 1.0), ValueError(f"p is epxected to be between 0 and 1, got {p}")
         self.p = float(p)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # TODO: switch training=True to training=self.training if you want MC dropout only at train-time.
-        return F.dropout(x, p=self.p, training=True)
+        return F.dropout(x, p=self.p, training=True) # training=True forces dropout to be active during both training and interence, which is MC dropout
 
 
 class MCDropPath(nn.Module):
     """Skip-connection path with Monte Carlo dropout"""
-
-    def __init__(self, drop_prob: float = 0.0, scale_by_keep: bool = True) -> None:
+    def __init__(self, drop_prob: float = 0.0) -> None:
         super().__init__()
         self.drop_prob = float(drop_prob)
-        self.scale_by_keep = bool(scale_by_keep)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # TODO: call _drop_path with drop_prob=0.0 or guard with self.training to disable eval-time MC behavior.
-        return _drop_path(x, drop_prob=self.drop_prob, scale_by_keep=self.scale_by_keep)
+        return _drop_path(x, drop_prob=self.drop_prob)
 
 
 def _replace_dropout_layers(module: nn.Module) -> None:
-    """Recursively replace dropout-like modules with MC variants."""
+    """Recursively replace dropout layers (both neuron and skip-connection) with their Monte Carlo counterparts."""
     for name, child in list(module.named_children()):
-        if isinstance(child, nn.Dropout):
-            # TODO: swap MCDropout back to nn.Dropout if you want standard deterministic eval mode.
+        if isinstance(child, nn.Dropout): # if a single neuron
             setattr(module, name, MCDropout(p=child.p))
             continue
 
-        if isinstance(child, DropPath):
-            # TODO: swap MCDropPath back to DropPath to disable eval-time stochastic depth.
+        if isinstance(child, DropPath): # if a skip-connection
             drop_prob = float(getattr(child, "drop_prob", 0.0))
-            scale_by_keep = bool(getattr(child, "scale_by_keep", True))
-            setattr(module, name, MCDropPath(drop_prob=drop_prob, scale_by_keep=scale_by_keep))
+            setattr(module, name, MCDropPath(drop_prob=drop_prob))
             continue
 
-        _replace_dropout_layers(child)
+        _replace_dropout_layers(child) # recursive call
 
 
 class SwinUNETRWithMCDropout(nn.Module):
-    """MONAI SwinUNETR wrapper with optional MC dropout."""
-
+    """MONAI SwinUNETR wrapper with MC dropout."""
     def __init__(
         self,
         img_size: Union[Sequence[int], int],
@@ -115,28 +107,19 @@ class SwinUNETRWithMCDropout(nn.Module):
             spatial_dims=spatial_dims,
             downsample=downsample,
         )
-
+        # clean the kwargs to pass along to the SwinUNETR constructor
         allowed = set(inspect.signature(MonaiSwinUNETR.__init__).parameters)
         filtered_kwargs = {k: v for k, v in init_kwargs.items() if k in allowed}
 
+        # initialize the original SwinUNETR model
         self.model = MonaiSwinUNETR(**filtered_kwargs)
 
+        # and apply the MC dropout replacement
         if self.force_mc_dropout:
             _replace_dropout_layers(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.ndim != 5:
-            raise ValueError(f"Expected 5D tensor, got shape {tuple(x.shape)}")
-
-        if x.shape[1] != self.in_channels:
-            if x.shape[-1] == self.in_channels:
-                x = x.permute(0, 4, 1, 2, 3).contiguous()
-            else:
-                raise ValueError(
-                    "Input channel mismatch. Expected either NCDHW or NDHWC with "
-                    f"{self.in_channels} channels, got shape {tuple(x.shape)}"
-                )
-
+        # NCDHW is expected
         return self.model(x)
 
 
@@ -150,12 +133,11 @@ def build_swin_unetr_mc(
     force_mc_dropout: bool = True,
     **kwargs: Any,
 ) -> SwinUNETRWithMCDropout:
-    """Factory aligned with the 3D baseline input contract (D, H, W, C)."""
     if len(input_shape) != 4:
-        raise ValueError("input_shape must be (D, H, W, C)")
+        raise ValueError("input_shape must be (C, D, H, W)")
 
-    img_size = tuple(int(v) for v in input_shape[:3])
-    in_channels = int(input_shape[3])
+    in_channels = int(input_shape[0])
+    img_size = tuple(int(v) for v in input_shape[1:])
 
     return SwinUNETRWithMCDropout(
         img_size=img_size,
