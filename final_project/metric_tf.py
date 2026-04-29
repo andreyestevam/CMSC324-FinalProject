@@ -1,4 +1,5 @@
 import tensorflow as tf
+import keras
 from skimage.metrics import hausdorff_distance as skimage_hausdorff
 import numpy as np
 
@@ -66,6 +67,7 @@ def soft_dice_loss(y_true, y_pred, smooth=1.0):
 
 # sum of bce and dice loss
 @tf.function
+@keras.saving.register_keras_serializable()
 def bce_dice_loss(y_true, y_pred):
     bce = tf.reduce_mean(tf.keras.losses.binary_crossentropy(y_true, y_pred))
     return bce + soft_dice_loss(y_true, y_pred)
