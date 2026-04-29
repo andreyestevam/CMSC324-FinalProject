@@ -40,8 +40,6 @@ def model2(*hparams):
     # reserve for Swin implementation
     pass
 
-# NOTE: start a name with underscore(_) to not import
-# Yixuan's note: Why we need this??
 def conv3d_block(x, filters, dropout_rate=0.0):
     x = tf.keras.layers.Conv3D(filters, 3, padding="same", use_bias=False)(x)
     x = tf.keras.layers.BatchNormalization()(x)
