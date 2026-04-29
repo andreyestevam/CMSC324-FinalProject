@@ -12,8 +12,8 @@ with open('./hparams.json', 'r') as f:
 gpus = tf.config.list_physical_devices('GPU')
 print("Using device:", "GPU" if gpus else "CPU")
 
-x_train, y_train = build_dataset(dataset='train', n_train=42)
-x_val,   y_val   = build_dataset(dataset='val', n_val=6)
+x_train, y_train = build_dataset(dataset='train', n_train=56)
+x_val,   y_val   = build_dataset(dataset='val', n_val=12)
 
 train_ds = make_tf_dataset(x_train, y_train, training=True)
 val_ds = make_tf_dataset(x_val,   y_val,   training=False)
@@ -60,7 +60,7 @@ with open("unet_history.json", "w") as f:
 print("Saved history to: unet_history.json")
 
 # MC dropout variance check 
-from metric import mc_prediction # the name may change
+from metric_tf import mc_prediction # the name may change
 
 sample_x = x_val[:1]   # single patch to test uncertainty
 pred_mean, pred_std, pred_all = mc_prediction(
