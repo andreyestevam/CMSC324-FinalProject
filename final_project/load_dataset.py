@@ -88,7 +88,7 @@ def collect_cases(training_dir: Path = TRAIN_DIR) -> List[Dict[str, Path]]:
 
 ## LOAD TO PATCHES
 # Volume Preprocessing
-def _zscore_pos(x: np.ndarray) -> np.ndarray:
+def _zscore_nonzero(x: np.ndarray) -> np.ndarray:
     """
     Normalize non-zero voxels
     (mean=0; std=1)
@@ -159,7 +159,7 @@ def _load_case_as_patches(case: Dict[str, Path],
     modalities = []
     for key in ["t1", "t1ce", "t2", "flair"]:
         vol = nib.load(str(case[key])).get_fdata().astype(np.float32)
-        modalities.append(_zscore_pos(_to_dhw(vol)))
+        modalities.append(_zscore_nonzero(_to_dhw(vol)))
 
     seg = nib.load(str(case["seg"])).get_fdata().astype(np.float32)
     seg = _to_dhw(seg)
