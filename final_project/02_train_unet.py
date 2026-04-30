@@ -1,9 +1,10 @@
 import tensorflow as tf
-import os, json
+import json
 from load_dataset import build_dataset, make_tf_dataset
 from model_unet import build_unet3d
 from metric_tf import dice_coef, bce_dice_loss
 
+## Load Hyperparameter
 with open('./hparams.json', 'r') as f:
     config = json.load(f)
     hparams = config['unet']['hparam_grid'] 
@@ -12,12 +13,14 @@ with open('./hparams.json', 'r') as f:
 gpus = tf.config.list_physical_devices('GPU')
 print("Using device:", "GPU" if gpus else "CPU")
 
+## Build datasets
 x_train, y_train = build_dataset(dataset='train', n_train=56)
 x_val,   y_val   = build_dataset(dataset='val', n_val=12)
 
 train_ds = make_tf_dataset(x_train, y_train, training=True)
 val_ds = make_tf_dataset(x_val,   y_val,   training=False)
 
+## Configure Model
 model = build_unet3d(
     input_shape=tuple(hparams["input_shape"]),
     dropout_rate=hparams["dropout_rate"]    # passes 0.2 from hparams.json
@@ -32,6 +35,7 @@ callbacks = [
 
 optim = tf.keras.optimizers.Adam(learning_rate=hparams["learning_rate"]) 
 
+## Train Model
 model.compile(
     optimizer=optim,
     loss=bce_dice_loss,
@@ -46,6 +50,7 @@ history = model.fit(
     verbose=1,
 )
 
+## Check the result
 # Best validation dice
 best_val = max(history.history.get("val_dice_coef", [float("nan")]))
 print(f"Best validation Dice: {best_val:.4f}")

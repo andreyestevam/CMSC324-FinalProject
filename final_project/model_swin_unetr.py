@@ -133,6 +133,7 @@ def build_swin_unetr_mc(
     force_mc_dropout: bool = True,
     **kwargs: Any,
 ) -> SwinUNETRWithMCDropout:
+    
     if len(input_shape) != 4:
         raise ValueError("input_shape must be (C, D, H, W)")
 
