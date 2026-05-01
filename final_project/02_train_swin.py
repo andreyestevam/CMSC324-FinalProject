@@ -39,7 +39,7 @@ print("Train batches:", len(train_loader), "Val batches:", len(val_loader))
 model = build_swin_unetr_mc(
     input_shape=(4, *hparams["patch_size"]),
     out_channels=1,
-    feature_size=hparams["feature_size"], # TODO: what does this hparameter do?
+    feature_size=hparams["feature_size"], 
     drop_rate=hparams["dropout_rate"],
     attn_drop_rate=hparams["attn_drop_rate"],
     dropout_path_rate=hparams["dropout_path_rate"],
