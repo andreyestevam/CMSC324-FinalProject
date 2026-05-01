@@ -9,27 +9,32 @@ from load_dataset import (
     make_torch_dataset,
 )
 from metric_torch import bce_dice_loss, dice_coef
-# from metric import bce_dice_loss_torch, dice_coef_torch # TODO: maybe merge metric and metric_torch
 from model_swin_unetr import build_swin_unetr_mc
 
+## Load Hyperparameters
 with open("./hparams.json", "r") as f:
     config = json.load(f)
     swin_cfg = config["swin_transformer"]
-    hparams = swin_cfg["hparam_grid"] # TODO: will change once the json structure is updated
-
+    hparams = swin_cfg["hparam_grid"]
+# Check GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
-print("Hparams:", swin_cfg["hparam_grid"]) # TODO: will change once the json structure is updated
+print("Hparams:", swin_cfg["hparam_grid"])
 
+
+## Build Datasets
 x_train, y_train = build_dataset(dataset='train', n_train=56)
 x_val, y_val = build_dataset(dataset='val', n_val=12)
 
-# TODO: Replace this temporary test-as-validation setup with a proper validation split.
 train_loader = make_torch_dataset(x_train, y_train, training=True)
 val_loader = make_torch_dataset(x_val, y_val, training=False)
 
 print("Train samples:", len(x_train), "Val samples:", len(x_val))
 print("Train batches:", len(train_loader), "Val batches:", len(val_loader))
+
+
+## Configure model
+# PyTorch Training with External model import
 
 model = build_swin_unetr_mc(
     input_shape=(4, *hparams["patch_size"]),
@@ -50,6 +55,9 @@ history = {"train_loss": [], "train_dice": [], "val_loss": [], "val_dice": []}
 
 print(model.__class__.__name__)
 print("Checkpoint path:", model_out)
+
+
+## Train model
 
 for epoch in range(1, hparams["n_epochs"] + 1):
     model.train()
@@ -105,11 +113,11 @@ for epoch in range(1, hparams["n_epochs"] + 1):
         f"val_loss={mean_val_loss:.4f} val_dice={mean_val_dice:.4f}"
     )
 
+## Check the results
 # Save history as swin_history.json
 with open("swin_history.json", "w") as f:
     json.dump(history, f)
 print("Saved history to: swin_history.json")
-
 
 print(f"Best validation Dice: {best_val_dice:.4f}")
 print(f"Saved checkpoint: {model_out}")
@@ -130,5 +138,4 @@ with torch.no_grad():
 print(f"MC dropout variance mean (single sample): {mc_variance:.6f}")
 
 from torchinfo import summary
-
 summary(model, input_size=(1, 4, 64, 64, 64))
